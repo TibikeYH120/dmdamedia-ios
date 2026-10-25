@@ -1,25 +1,30 @@
 name: Build iOS IPA
 on:
+  workflow_dispatch:
   push:
     branches: [main]
-  workflow_dispatch:
 jobs:
   build:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Install xcodegen
+        run: brew install xcodegen
       - name: Generate project
-        run: xcodegen generate --spec project.yml
-      - name: Build unsigned IPA
+        run: xcodegen generate
+      - name: Build
         run: |
-          set -e
-          xcodebuild -project DMDMedia.xcodeproj -scheme DMDMedia -configuration Release -destination 'generic/platform=iOS' -derivedDataPath build CODE_SIGNING_ALLOWED=NO CODE_SIGN_IDENTITY=- build
+          xcodebuild -project DMDMedia.xcodeproj -scheme DMDMedia \
+            -configuration Release -sdk iphoneos -derivedDataPath build \
+            -allowProvisioningUpdates CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build
+      - name: Package IPA
+        run: |
           APP=$(find build/Build/Products -name "DMDMedia.app" | head -1)
           mkdir -p Payload
           cp -R "$APP" Payload/
-          zip -qry DMDMedia.ipa Payload
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+          zip -qr DMDMedia.ipa Payload
+      - uses: actions/upload-artifact@v4
         with:
           name: DMDMedia-ipa
           path: DMDMedia.ipa
