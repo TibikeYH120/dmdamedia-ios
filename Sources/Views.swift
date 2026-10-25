@@ -77,7 +77,8 @@ struct CardGrid: View {
                         Text(c.date.isEmpty ? c.year : c.date).font(.system(size: 10.5)).foregroundColor(Color.white.opacity(0.55))
                     }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
+                .transition(.cardIn)
             }
         }
     }
@@ -91,24 +92,13 @@ struct Badge: View {
     }
 }
 
-struct LoadingView: View {
-    var text = "Betöltés..."
-    var body: some View {
-        VStack(spacing: 14) {
-            ProgressView().scaleEffect(1.3)
-            Text(text).font(.system(size: 13)).foregroundColor(.white.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-}
-
 // ---------- Kezdőlap ----------
 struct HomeView: View {
     @State private var sections: [(String, [Card])] = []
     @State private var loading = true
     var body: some View {
         ScrollView {
-            if loading { LoadingView().frame(height: 420) }
+            if loading { SkeletonGrid() }
             else {
                 VStack(alignment: .leading, spacing: 20) {
                     ForEach(sections, id: \.0) { s in
@@ -120,7 +110,7 @@ struct HomeView: View {
                 }.padding(14)
             }
         }
-        .background(Color(red: 0.043, green: 0.059, blue: 0.102).ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         .navigationTitle("DMD Media")
         .onAppear { if sections.isEmpty { load() } }
     }
@@ -141,14 +131,16 @@ struct HomeView: View {
             let hc = JSONX.arr(home["cards"]).map(Card.init)
             let sc = JSONX.arr(sor["cards"]).map(Card.init)
             let fc = JSONX.arr(film["cards"]).map(Card.init)
-            sections = [
-                ("Legújabb sorozat részek", sc.filter { $0.kind == "episode" }),
-                ("TOP Sorozatok", hc.filter { $0.kind == "series" }),
-                ("TOP Filmek", hc.filter { $0.kind == "movie" }),
-                ("Legújabb filmek", fc.filter { $0.kind == "movie" }),
-                ("Napi felkapott", hc)
-            ]
-            loading = false
+            withAnimation(.easeOut(duration: 0.35)) {
+                sections = [
+                    ("Legújabb sorozat részek", sc.filter { $0.kind == "episode" }),
+                    ("TOP Sorozatok", hc.filter { $0.kind == "series" }),
+                    ("TOP Filmek", hc.filter { $0.kind == "movie" }),
+                    ("Legújabb filmek", fc.filter { $0.kind == "movie" }),
+                    ("Napi felkapott", hc)
+                ]
+                loading = false
+            }
         }
     }
 }
@@ -163,7 +155,7 @@ struct CatalogView: View {
     @State private var loading = true
     var body: some View {
         ScrollView {
-            if loading { LoadingView().frame(height: 420) }
+            if loading { SkeletonGrid() }
             else {
                 VStack(spacing: 14) {
                     CardGrid(cards: cards).padding(14)
@@ -179,7 +171,7 @@ struct CatalogView: View {
                 }
             }
         }
-        .background(Color(red: 0.043, green: 0.059, blue: 0.102).ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         .navigationTitle(title)
         .onAppear { if cards.isEmpty { load(1, pagerBase) } }
     }
@@ -190,8 +182,10 @@ struct CatalogView: View {
         if let base = base, p > 1 { url = base + String(p) }
         Scraper.shared.scrape(url) { r in
             DispatchQueue.main.async {
-                if case .success(let d) = r { cards = JSONX.arr(d["cards"]).map(Card.init) }
-                loading = false
+                withAnimation(.easeOut(duration: 0.32)) {
+                    if case .success(let d) = r { cards = JSONX.arr(d["cards"]).map(Card.init) }
+                    loading = false
+                }
             }
         }
     }
@@ -208,11 +202,11 @@ struct CategoryView: View {
                         Text(name).font(.system(size: 14.5, weight: .bold)).foregroundColor(.white)
                             .frame(maxWidth: .infinity).padding(18)
                             .background(Color.white.opacity(0.05)).cornerRadius(12)
-                    }.buttonStyle(.plain)
+                    }.buttonStyle(PressableStyle())
                 }
             }.padding(14)
         }
-        .background(Color(red: 0.043, green: 0.059, blue: 0.102).ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         .navigationTitle("Kategóriák")
     }
 }
@@ -238,7 +232,7 @@ struct SearchView: View {
             }
             Spacer()
         }
-        .background(Color(red: 0.043, green: 0.059, blue: 0.102).ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         .navigationTitle("Keresés")
     }
     func search() {
@@ -246,8 +240,10 @@ struct SearchView: View {
         loading = true; searched = true
         Scraper.shared.scrapePost(kind: "search", params: ["q": q]) { r in
             DispatchQueue.main.async {
-                if case .success(let d) = r { cards = JSONX.arr(d["cards"]).map(Card.init) }
-                loading = false
+                withAnimation(.easeOut(duration: 0.32)) {
+                    if case .success(let d) = r { cards = JSONX.arr(d["cards"]).map(Card.init) }
+                    loading = false
+                }
             }
         }
     }
@@ -267,7 +263,7 @@ struct DetailView: View {
 
     var body: some View {
         ScrollView {
-            if loading { LoadingView().frame(height: 420) }
+            if loading { SkeletonGrid() }
             else {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(alignment: .top, spacing: 16) {
@@ -288,6 +284,7 @@ struct DetailView: View {
                                     Label("Lejátszás", systemImage: "play.fill").frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(.borderedProminent).tint(Color(red: 0.545, green: 0.361, blue: 0.965))
+                                .scaleEffect(1.0)
                             }
                             if !providers.isEmpty {
                                 ScrollView(.horizontal, showsIndicators: false) {
@@ -309,10 +306,15 @@ struct DetailView: View {
                             HStack(spacing: 8) {
                                 ForEach(seasons) { s in
                                     Button(s.label.isEmpty ? "\(s.n). évad" : s.label) {
-                                        seasonN = s.n; loadSeason()
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                                            seasonN = s.n
+                                        }
+                                        loadSeason()
                                     }
                                     .buttonStyle(.bordered)
                                     .foregroundColor(s.n == seasonN ? Color(red: 0.13, green: 0.83, blue: 0.93) : .white)
+                                    .scaleEffect(s.n == seasonN ? 1.06 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: seasonN)
                                 }
                             }
                         }
@@ -332,7 +334,9 @@ struct DetailView: View {
                                     Image(systemName: "play.circle").foregroundColor(.white.opacity(0.5))
                                 }
                                 .padding(12).background(Color.white.opacity(0.05)).cornerRadius(11)
-                            }.buttonStyle(.plain)
+                            }
+                            .buttonStyle(PressableStyle())
+                            .transition(.cardIn)
                         }
                     }
                     Text("Csak a lejátszó töltődik be — reklámblokkolóval.").font(.system(size: 11)).foregroundColor(.white.opacity(0.4))
@@ -340,7 +344,7 @@ struct DetailView: View {
                 .padding(14)
             }
         }
-        .background(Color(red: 0.043, green: 0.059, blue: 0.102).ignoresSafeArea())
+        .background(AppBackground().ignoresSafeArea())
         .navigationBarTitleDisplayMode(.inline)
         .fullScreenCover(item: Binding(
             get: { player.map { PlayerItem(url: $0.0, title: $0.1) } },
@@ -354,15 +358,17 @@ struct DetailView: View {
     func load() {
         Scraper.shared.scrape(pageURL) { r in
             DispatchQueue.main.async {
-                if case .success(let data) = r {
-                    d = data
-                    seasons = JSONX.arr(data["seasons"]).map(Season.init)
-                    eps = JSONX.arr(data["episodes"]).map(Episode.init)
-                    providers = JSONX.arr(data["providers"]).map(Provider.init)
-                    if let s = seasons.first { seasonN = s.n; kod = s.kod }
-                    else { kod = guessKod(pageURL) }
+                withAnimation(.easeOut(duration: 0.35)) {
+                    if case .success(let data) = r {
+                        d = data
+                        seasons = JSONX.arr(data["seasons"]).map(Season.init)
+                        eps = JSONX.arr(data["episodes"]).map(Episode.init)
+                        providers = JSONX.arr(data["providers"]).map(Provider.init)
+                        if let s = seasons.first { seasonN = s.n; kod = s.kod }
+                        else { kod = guessKod(pageURL) }
+                    }
+                    loading = false
                 }
-                loading = false
             }
         }
     }
@@ -371,8 +377,10 @@ struct DetailView: View {
         loading = true
         Scraper.shared.scrapePost(kind: "season", params: ["kod": kod, "evad": String(seasonN)]) { r in
             DispatchQueue.main.async {
-                if case .success(let data) = r { eps = JSONX.arr(data["episodes"]).map(Episode.init) }
-                loading = false
+                withAnimation(.easeOut(duration: 0.28)) {
+                    if case .success(let data) = r { eps = JSONX.arr(data["episodes"]).map(Episode.init) }
+                    loading = false
+                }
             }
         }
     }
